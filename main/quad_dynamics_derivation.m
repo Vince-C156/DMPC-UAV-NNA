@@ -88,7 +88,6 @@ latex(C_lin)
 
 
 
-
 % k: lift constant
 % m: total mass
 % b: drag constant
@@ -132,6 +131,8 @@ B = jacobian( ...
     u ...
 );
 
+% i think we dont use B_lin. If the rotation matrix is linearized then
+% the drone will only fly straight up
 A_lin = subs(A, ...
     {phi,theta,phi_dot,theta_dot,psi_dot}, ...
     {0,0,0,0,0} ...
