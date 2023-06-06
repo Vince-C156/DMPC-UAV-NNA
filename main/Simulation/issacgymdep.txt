@@ -1,0 +1,89 @@
+How to make sure your Isaac Gym is built correctly (Ubuntu 20.04 Focal Linux)
+----------------
+
+1. Check the technical requirements
+    -only RTX GPU's can run the software
+    -only GPU's with sufficient memory
+    
+2. Assuming you have an nvidia graphics card check the driver compatibility
+    -https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/requirements.html
+    
+    -if you have incompatiable drivers use nvidia's matching tool here 
+    (https://www.nvidia.com/download/index.aspx)
+    
+    
+    -to install the graphics driver make sure to uninstall any prexisting drivers, including ones that are not actively being used
+    
+    [sudo apt-get remove --purge nvidia-*]
+    [sudo apt-get remove --purge cuda-*]
+    [sudo apt-get autoremove]
+    [sudo apt-get clean]
+    
+    -Now we are going to use Nvidia's Cuda & Driver .run script to automatically set up both.
+    (https://developer.nvidia.com/cuda-downloads) download the runfile(local)
+    
+    -Once you find a compatiable version run the following commands provided by nvidia. At this time for me they are
+    
+    [wget https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda_12.1.1_530.30.02_linux.run]
+    
+    [sudo sh cuda_12.1.1_530.30.02_linux.run]
+    
+    -if you have any issues here it is likely that you have not completely purged previous nvidia GPU installations. 
+    
+    -Try to check the integrety of the file by using the md5sum command, compare your resulting value with the codes in the 'check sums' link below the provided code.
+    
+    [ if (md5sum cuda_12.1.1_530.30.02_linux.run) == 'eb7798138a8064c291bee0820c077ffb' ]
+    
+    
+    -CUDA WILL NOT WORK WITHOUT SETTING THESE ENVIRONMENT VARIABLES IN BASHRC
+    
+        [sudo nano ~/.bashrc]
+        *paste these commands in the text file
+	export CUDA_HOME="/usr/local/cuda-12.0"
+	export LD_LIBRARY_PATH="/usr/local/cuda-12.0/lib64:$LD_LIBRARY_PATH"
+	export PATH="/usr/local/cuda-12.0/bin:$PATH"
+        [source ~/.bashrc] * reload the update.
+    
+3. Now Check your CPU brand. AMD has put their own graphics software out that is similar to nvidia's CUDA. As a matter of fact both libaries work together to speed up RTX, ray tracing.
+
+	-if you have an AMD CPU, you will likely need to install a compatiable version of vulkan, openGL, and several other libaries to interface with Nvidia's ray tracing protocols.
+	
+	-other wise follow the documentation here to install nvidia's inhouse ray tracing 
+	(https://developer.nvidia.com/designworks/optix/download)
+	
+3. Installing Vulkan
+
+	-Vulkan is a very expansive graphics libary, for this reason the developers have let the users pick the specific functionalities they want rather than having to make a full installation. Due to this it is much easier to install and built from source, in my opinion. 
+	
+	-First we will install the vulkan SDK
+	
+	[wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -]
+	[sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-focal.list http://packages.lunarg.com/vulkan/lunarg-vulkan-focal.list]
+	[sudo apt update]
+	[sudo apt install vulkan-sdk]
+	[sudo apt autoremove]
+	(https://vulkan.lunarg.com/doc/view/latest/linux/getting_started_ubuntu.html)
+	
+	-We will only focus on ray tracing compatiblity between vulkan and cuda in the context of Isaac sim. Nvidia has provided a github repo that will build and install all the related ray tracing extensions vulkan needs to work. We will first install the core dependencies and then build the rest.
+	(https://github.com/nvpro-samples/nvpro_core)
+	(https://github.com/nvpro-samples/build_all)
+	
+	-follow the commands as such. Also make sure *Additionally, the samples require a C++17 capable compiler and CMake 3.10 or higher.*
+	
+	[sudo apt-get install libx11-dev libxcb1-dev libxcb-keysyms1-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev libxxf86vm-dev libvulkan-dev libassimp-dev]
+	
+       [sudo apt-get install libglfw3-dev]
+	
+	[git clone https://github.com/nvpro-samples/nvpro_core]
+	[cd nvpro_core]
+	[sudo cmake CMakeLists.txt]
+	[sudo cmake --build cmake_install.cmake]
+	
+	[git clone https://github.com/nvpro-samples/build_all]
+	[sudo build_all/clone_all.sh]
+	[sudo cmake build_all/CMakeLists.txt]
+	[sudo cmake --build cmake_install.cmake]
+	
+	
+	-make sure to clean any left over files form this process it all adds up. You should be able to run Isaac Gym now without the RTX Loading ..... crash.
+	
