@@ -7,4 +7,4 @@ We try utilize the strengths and compensate the weaknesses of Optimal Control an
 
 Python3.10, Cuda-12.0, Ubuntu 20.04, Python3.7(Isaac Python runtime)
 
-Libraries: IsaacSim, skrl, matplotlib, numpy, px4, ros
+Libraries: IsaacSim, OmniisaacGymEnvs, skrl, matplotlib, numpy, px4, ros
