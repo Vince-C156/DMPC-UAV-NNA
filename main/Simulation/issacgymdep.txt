@@ -84,6 +84,8 @@ How to make sure your Isaac Gym is built correctly (Ubuntu 20.04 Focal Linux)
 	[sudo cmake build_all/CMakeLists.txt]
 	[sudo cmake --build cmake_install.cmake]
 	
+4. Lastly follow https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/
+	
 	
 	-make sure to clean any left over files form this process it all adds up. You should be able to run Isaac Gym now without the RTX Loading ..... crash.
 	
