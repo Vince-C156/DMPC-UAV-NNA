@@ -6,7 +6,7 @@ print("INITALIZING SCRIPT")
 # load environment
 env = load_omniverse_isaacgym_env(task_name="Crazyflie")
 #env = wrap_env(env)
-obs, infos = env.reset()
+obs = env.reset()
 terminated, truncated = False, False
 print("================")
 print(f"DONE LOADING ENV x0 {obs}")
