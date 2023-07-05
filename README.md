@@ -5,6 +5,6 @@ Model Predictive Control, or MPC, typically use a simplified linear discrete tim
 
 We try utilize the strengths and compensate the weaknesses of Optimal Control and Reinforcement Learning with a combined control policy. Our policy aims to leverage the convergence guarentees in MPC formulations and the generalization capabilities in Policy Gradient Optimization, PPO, by having our PPO policy learn how much actuation to compenstate based on the error of MPC during runtime.  
 
-Python3.10, Cuda-12.0, Ubuntu 20.04
+Python3.10, Cuda-12.0, Ubuntu 20.04, Python3.7(Isaac Python runtime)
 
-Libraries: pydrake, stable-baselines3, gym-drake, underactuated, manipulation, matplotlib, numpy, px4, ros
+Libraries: IsaacSim, OmniisaacGymEnvs, skrl, matplotlib, numpy, px4, ros

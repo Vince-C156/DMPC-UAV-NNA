@@ -1,0 +1,6 @@
+skrl>=0.10.2
+numpy>=1.20
+torch
+opencv-python
+tensorboard
+
