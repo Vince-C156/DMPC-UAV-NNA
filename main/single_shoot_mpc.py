@@ -26,16 +26,16 @@ state = vertcat(x, y, z, phi, theta, psi,\
     x_d, y_d, z_d, phi_d, theta_d, yaw_d)
 
 # Aerodynamic Parameters
-x = SX.sym('k')     # lift constant for thrust 
-x = SX.sym('b')     # drag constant for torque
-x = SX.sym('Ax')    # air resistance coeff, drag force proportional to velocity
-x = SX.sym('Ay')    # air resistance coeff in y direction
-x = SX.sym('Az')    # air resistance coeff in z direction
+k = SX.sym('k')     # lift constant for thrust 
+b = SX.sym('b')     # drag constant for torque
+Ax = SX.sym('Ax')    # air resistance coeff, drag force proportional to velocity
+Ay = SX.sym('Ay')    # air resistance coeff in y direction
+Az = SX.sym('Az')    # air resistance coeff in z direction
 
 
 # Inertial Parameters
-x = SX.sym('m')     # total mass of quadcopter
-x = SX.sym('l')     # dist between rotor and COM-THIS ASSUMES SYMMETRY
+m = SX.sym('m')     # total mass of quadcopter
+l = SX.sym('l')     # dist between rotor and COM-THIS ASSUMES SYMMETRY
 Ixx = SX.sym('Ixx') # moment of inertia about x-axis
 Iyy = SX.sym('Iyy') # moment of inertia about y-axis
 Izz = SX.sym('Izz') # moment of interia about z-axis
