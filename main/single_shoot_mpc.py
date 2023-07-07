@@ -169,22 +169,22 @@ Build the integrator function.
 Using RK4, integrate the dynamics and cost function.
 '''
 f = Function('f', [X_aug, U], [Xdot_aug, L])    # outputs continuous dynamics and objective
-X0 = MX.sym('X0', 17)   # inputted state
-U0 = MX.sym('U0', 4)    # inputted control input
-Xf = X0    # integrated dynamics 
-q  = 0     # integrated objective
+xi = SX.sym('xi', 17)   # inputted state
+u = SX.sym('u', 4)    # inputted control input
+xf = xi    # integrated dynamics 
+J  = 0     # integrated objective
 
 # RK4 definition
 for i in range(4):               
-    k1, k1_q = f(Xf, U0)
-    k2, k2_q = f(Xf + DT/2 * k1, U0)
-    k3, k3_q = f(Xf + DT/2 * k2, U0)
-    k4, k4_q = f(Xf + DT * k3, U0)
-    Xf += DT/6 * (k1 +2*k2 +2*k3 +k4)
-    q += DT/6 * (k1_q + 2*k2_q + 2*k3_q + k4_q)
+    k1, k1_q = f(xf, u)
+    k2, k2_q = f(xf + DT/2 * k1, u)
+    k3, k3_q = f(xf + DT/2 * k2, u)
+    k4, k4_q = f(xf + DT * k3, u)
+    xf += DT/6 * (k1 +2*k2 +2*k3 +k4)
+    J += DT/6 * (k1_q + 2*k2_q + 2*k3_q + k4_q)
 
 # Integrator function (discrete-time dynamics/state)
-F = Function('F', [X0, U0], [Xf, q],['X0','U0'],['Xf','q'])
+F = Function('F', [xi, u], [xf, J],['xi','u'],['xf','J'])
 
 
 
@@ -200,22 +200,82 @@ Izz_val = 3.2347 * 10**(-5)
 
 # Evaluate at a test point
 st = time.time()
-Fk = F(X0=[0,0,0,0,0,0,0,0,0,0,0,0, 
+Fk = F(xi=[0,0,0,0,0,0,0,0,0,0,0,0, 
     m_val, l_val, Ixx_val, Iyy_val, Izz_val], 
-    U0=100*np.ones((4,1))
+    u=100*np.ones((4,1))
 )
 et = time.time()
-print(Fk['Xf'])
-print(Fk['q'])
+print(Fk['xf'])
+print(Fk['J'])
 
 
 
 ''' 
-Formulate NLP.
-Create NLP solver.
-x0, constraints, and learned parameters as inputs.
+Formulate NLP and create solver.
+x0, upper and lower bounds for states and inputs as parameters.
 '''
+# Start with an empty NLP
+input_constr = []
+lb_input = []
+ub_input = []
 
+state_constr = []
+lb_state = []
+ub_state = []
+
+J_tot = 0       # accumulated cost over the predictive horizon
+
+
+# Formulate the NLP
+# To achieve setpoint x*, states are written as x*-x
+X_i = SX([0,0,0,0,0,0,0,0,0,0,0,0, 
+    m_val, l_val, Ixx_val, Iyy_val, Izz_val
+])
+X_set = SX([0,0,10,0,0,0,0,0,0,0,0,0, 
+    m_val, l_val, Ixx_val, Iyy_val, Izz_val
+])
+Xk = X_set - X_i
+
+for k in range(T):
+    # Control constraints
+    Uk = SX.sym('U_' + str(k), 4)
+    for i in range(4):  # for each rotor in the control input
+        input_constr += [Uk[i]]   
+        lb_input += [-400]   # lower bound on square of rotor freq
+        ub_input += [400]    # upper bound on square of rotor freq
+
+    # Integrate till the end of the interval
+    Fk = F(xi=Xk, u=Uk)
+    Xk = Fk['xf']
+    J_tot += Fk['J']
+
+    # Add inequality constraint on the states
+    #state_constr += [Xk[2]]     # elevation constraint: z >= 0
+    #lb_state += [0]
+    #ub_state += [inf]
+    
+    state_constr += [Xk[3]]     # roll constraint: 60 deg 
+    lb_state += [-pi/3]
+    ub_state += [pi/3]
+    '''
+    state_constr += [X[4]]      # pitch constraint: 60 deg
+    lb_state += [-pi/3]
+    ub_state += [pi/3]
+    '''
+
+print(input_constr)
+print()
+print('HEY')
+print(state_constr)
+# NLP notation: x--what you're solving for (control input), g--constraints
+# Create an NLP solver
+prob = {'f': J_tot, 'x': vertcat(*input_constr), 'g': vertcat(*state_constr)}
+solver = nlpsol('solver', 'ipopt', prob)
+
+# Solve the NLP
+sol = solver(x0=np.ones(40), 
+    lbx=lb_input, ubx=ub_input, lbg=lb_state, ubg=ub_state)
+u_opt = sol['x']
 
 
 
