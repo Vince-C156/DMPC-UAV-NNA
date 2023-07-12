@@ -80,7 +80,7 @@ I = SX(np.array([
     [0, Iyy, 0], 
     [0, 0, Izz]
 ]))
-J = W.T @ I @ W;
+j = W.T @ I @ W;
 
 
 # Coriolis matrix for defining angular equations of motion
@@ -128,7 +128,7 @@ u1 = SX.sym('u1')
 u2 = SX.sym('u2')
 u3 = SX.sym('u3')
 u4 = SX.sym('u4')
-U = vertcat(u1, u2, u3, u4)
+u = vertcat(u1, u2, u3, u4)
 
 
 # actuation dynamics
@@ -137,15 +137,18 @@ tau_beta = SX(np.array([
     [l*kf*(-u1 + u3)],
     [km*(-u1 + u2 - u3 + u4)]
 ]))
-thrust = kf*(U[0] + U[1] + U[2] + U[3])
+thrust = kf*(u1 + u2 + u3 + u4)
 
 
 # continuous-time dynamics
 Xdot = vertcat(
     x_d, y_d, z_d, phi_d, theta_d, psi_d,
     -9.81 * vertcat(0,0,1) + R @ vertcat(0,0,thrust) / m,
-    inv(J) @ (tau_beta - C @ vertcat(phi_d, theta_d, psi_d))
+    inv(j) @ (tau_beta - C @ vertcat(phi_d, theta_d, psi_d))
 )   
+print()
+print(inv(j))
+print()
 # time-derivative of inertial terms assumed to be 0
 Xdot_aug = vertcat(Xdot, 0, 0, 0, 0, 0)
 
@@ -157,7 +160,7 @@ Define objective function.
 '''
 Q = SX.eye(17)                          # Cost matrices
 R = SX.eye(4)
-L = X_aug.T @ Q @ X_aug + U.T @ R @ U   # Objective function
+L = X_aug.T @ Q @ X_aug + u.T @ R @ u   # Objective function
 
 T = 10      # predictive horizon length
 DT = 0.1    # time step in seconds
@@ -168,23 +171,23 @@ DT = 0.1    # time step in seconds
 Build the integrator function.
 Using RK4, integrate the dynamics and cost function.
 '''
-f = Function('f', [X_aug, U], [Xdot_aug, L])    # outputs continuous dynamics and objective
-xi = SX.sym('xi', 17)   # inputted state
-u = SX.sym('u', 4)    # inputted control input
-xf = xi    # integrated dynamics 
+f = Function('f', [X_aug, u], [Xdot_aug, L])    # outputs continuous dynamics and objective
+Xi = SX.sym('Xi', 17)   # inputted state
+U = SX.sym('U', 4)    # inputted control input
+Xf = Xi    # integrated dynamics 
 J  = 0     # integrated objective
 
 # RK4 definition
 for i in range(4):               
-    k1, k1_q = f(xf, u)
-    k2, k2_q = f(xf + DT/2 * k1, u)
-    k3, k3_q = f(xf + DT/2 * k2, u)
-    k4, k4_q = f(xf + DT * k3, u)
-    xf += DT/6 * (k1 +2*k2 +2*k3 +k4)
+    k1, k1_q = f(Xf, U)
+    k2, k2_q = f(Xf + DT/2 * k1, U)
+    k3, k3_q = f(Xf + DT/2 * k2, U)
+    k4, k4_q = f(Xf + DT * k3, U)
+    Xf += DT/6 * (k1 +2*k2 +2*k3 +k4)
     J += DT/6 * (k1_q + 2*k2_q + 2*k3_q + k4_q)
 
 # Integrator function (discrete-time dynamics/state)
-F = Function('F', [xi, u], [xf, J],['xi','u'],['xf','J'])
+F = Function('F', [Xi, U], [Xf, J],['Xi','U'],['Xf','J'])
 
 
 
@@ -199,13 +202,11 @@ Iyy_val = 2.3951 * 10**(-5)
 Izz_val = 3.2347 * 10**(-5)
 
 # Evaluate at a test point
-st = time.time()
-Fk = F(xi=[0,0,0,0,0,0,0,0,0,0,0,0, 
+Fk = F(Xi=[0,0,0,0,0,0,0,0,0,0,0,0, 
     m_val, l_val, Ixx_val, Iyy_val, Izz_val], 
-    u=100*np.ones((4,1))
+    U=36*np.ones((4,1))
 )
-et = time.time()
-print(Fk['xf'])
+print(Fk['Xf'])
 print(Fk['J'])
 
 
@@ -223,6 +224,7 @@ state_constr = []
 lb_state = []
 ub_state = []
 
+guess = []
 J_tot = 0       # accumulated cost over the predictive horizon
 
 
@@ -239,42 +241,41 @@ Xk = X_set - X_i
 for k in range(T):
     # Control constraints
     Uk = SX.sym('U_' + str(k), 4)
-    for i in range(4):  # for each rotor in the control input
-        input_constr += [Uk[i]]   
-        lb_input += [-400]   # lower bound on square of rotor freq
-        ub_input += [400]    # upper bound on square of rotor freq
+    input_constr += [Uk]   
+    '''
+    lb_input += [-64, -64, -64, -64]   # lower bound on square of rotor freq
+    ub_input += [64, 64, 64 ,64]    # upper bound on square of rotor freq
+    guess += [SX([36,36,36,36])]
+    '''
 
     # Integrate till the end of the interval
-    Fk = F(xi=Xk, u=Uk)
-    Xk = Fk['xf']
+    Fk = F(Xi=Xk, U=Uk)
+    Xk = Fk['Xf']
     J_tot += Fk['J']
-
-    # Add inequality constraint on the states
-    #state_constr += [Xk[2]]     # elevation constraint: z >= 0
-    #lb_state += [0]
-    #ub_state += [inf]
     
-    state_constr += [Xk[3]]     # roll constraint: 60 deg 
-    lb_state += [-pi/3]
-    ub_state += [pi/3]
+    # Add inequality constraint on the states
+    state_constr += [Xk]
     '''
-    state_constr += [X[4]]      # pitch constraint: 60 deg
-    lb_state += [-pi/3]
-    ub_state += [pi/3]
-    '''
+    lb_state += [
+        -inf, -inf, -inf, -pi/3, -pi/3, -inf, -inf, -inf, -inf, -inf, -inf, -inf,
+        -inf, -inf, -inf, -inf, -inf
+    ]
+    ub_state += [
+        inf, inf, inf, pi/3, pi/3, inf, inf, inf, inf, inf, inf, inf,
+        inf, inf, inf, inf, inf
+    ]'''
 
-print(input_constr)
-print()
-print('HEY')
-print(state_constr)
+
 # NLP notation: x--what you're solving for (control input), g--constraints
 # Create an NLP solver
 prob = {'f': J_tot, 'x': vertcat(*input_constr), 'g': vertcat(*state_constr)}
 solver = nlpsol('solver', 'ipopt', prob)
 
 # Solve the NLP
-sol = solver(x0=np.ones(40), 
-    lbx=lb_input, ubx=ub_input, lbg=lb_state, ubg=ub_state)
+print(gradient(J_tot, vertcat(*input_constr)))
+sol = solver()
+'''
+    lbx=lb_input, ubx=ub_input, lbg=lb_state, ubg=ub_state)'''
 u_opt = sol['x']
 
 
