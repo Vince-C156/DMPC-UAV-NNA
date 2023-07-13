@@ -236,7 +236,7 @@ X_i = SX([0,0,0,0,0,0,0,0,0,0,0,0,
 X_set = SX([0,0,10,0,0,0,0,0,0,0,0,0, 
     m_val, l_val, Ixx_val, Iyy_val, Izz_val
 ])
-Xk = X_set - X_i
+Xk = X_set
 
 for k in range(T):
     # Control constraints
@@ -251,7 +251,7 @@ for k in range(T):
     # Integrate till the end of the interval
     Fk = F(Xi=Xk, U=Uk)
     Xk = Fk['Xf']
-    J_tot += Fk['J']
+    J_tot = J_tot + Fk['J']
     
     # Add inequality constraint on the states
     state_constr += [Xk]

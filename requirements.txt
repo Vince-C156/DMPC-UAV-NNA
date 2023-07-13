@@ -1,0 +1,4 @@
+casadi==3.6.3
+numpy==1.21.5
+torch==2.0.0
+matplotlib==3.5.2
