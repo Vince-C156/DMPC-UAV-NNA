@@ -1,5 +1,6 @@
 from casadi import *
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 
 
@@ -146,9 +147,6 @@ Xdot = vertcat(
     -9.81 * vertcat(0,0,1) + R @ vertcat(0,0,thrust) / m,
     inv(j) @ (tau_beta - C @ vertcat(phi_d, theta_d, psi_d))
 )   
-print()
-print(inv(j))
-print()
 # time-derivative of inertial terms assumed to be 0
 Xdot_aug = vertcat(Xdot, 0, 0, 0, 0, 0)
 
@@ -158,9 +156,10 @@ Xdot_aug = vertcat(Xdot, 0, 0, 0, 0, 0)
 MPC configuration (time horizon, time step, num control intervals?).
 Define objective function.
 '''
-Q = SX.eye(17)                          # Cost matrices
+X_set = SX.sym('X_set', 17)     # setpoint for the state
+Q = SX.eye(17)                  # Cost matrices
 R = SX.eye(4)
-L = X_aug.T @ Q @ X_aug + u.T @ R @ u   # Objective function
+L = (X_set.T - X_aug.T) @ Q @ (X_set - X_aug) + u.T @ R @ u   # Objective function
 
 T = 10      # predictive horizon length
 DT = 0.1    # time step in seconds
@@ -171,28 +170,30 @@ DT = 0.1    # time step in seconds
 Build the integrator function.
 Using RK4, integrate the dynamics and cost function.
 '''
-f = Function('f', [X_aug, u], [Xdot_aug, L])    # outputs continuous dynamics and objective
+f = Function('f', [X_set, X_aug, u], [Xdot_aug, L])    # outputs continuous dynamics and objective
 Xi = SX.sym('Xi', 17)   # inputted state
 U = SX.sym('U', 4)    # inputted control input
+
 Xf = Xi    # integrated dynamics 
 J  = 0     # integrated objective
 
 # RK4 definition
 for i in range(4):               
-    k1, k1_q = f(Xf, U)
-    k2, k2_q = f(Xf + DT/2 * k1, U)
-    k3, k3_q = f(Xf + DT/2 * k2, U)
-    k4, k4_q = f(Xf + DT * k3, U)
+    k1, k1_L = f(X_set, Xf, U)
+    k2, k2_L = f(X_set, Xf + DT/2 * k1, U)
+    k3, k3_L = f(X_set, Xf + DT/2 * k2, U)
+    k4, k4_L = f(X_set, Xf + DT * k3, U)
     Xf += DT/6 * (k1 +2*k2 +2*k3 +k4)
-    J += DT/6 * (k1_q + 2*k2_q + 2*k3_q + k4_q)
+    J += DT/6 * (k1_L + 2*k2_L + 2*k3_L + k4_L)
 
 # Integrator function (discrete-time dynamics/state)
-F = Function('F', [Xi, U], [Xf, J],['Xi','U'],['Xf','J'])
+F = Function('F', [X_set, Xi, U], [Xf, J],['X_set','Xi','U'],['Xf','J'])
 
 
 
 ''' 
-Test dynamics
+All of the above steps are to initialize the MPC dynamics and integrator.
+Test values for dynamics
 '''
 # crazyflie 2.0 default inertial params:
 m_val = 0.027 # kg
@@ -201,19 +202,12 @@ Ixx_val = 2.3951 * 10**(-5)
 Iyy_val = 2.3951 * 10**(-5)
 Izz_val = 3.2347 * 10**(-5)
 
-# Evaluate at a test point
-Fk = F(Xi=[0,0,0,0,0,0,0,0,0,0,0,0, 
-    m_val, l_val, Ixx_val, Iyy_val, Izz_val], 
-    U=36*np.ones((4,1))
-)
-print(Fk['Xf'])
-print(Fk['J'])
-
 
 
 ''' 
 Formulate NLP and create solver.
 x0, upper and lower bounds for states and inputs as parameters.
+The problem must be re-formulated each loop.
 '''
 # Start with an empty NLP
 input_constr = []
@@ -229,14 +223,14 @@ J_tot = 0       # accumulated cost over the predictive horizon
 
 
 # Formulate the NLP
-# To achieve setpoint x*, states are written as x*-x
+# Setpoint of z=10m, hover condition
+setpoint = SX([0,0,30,0,0,0,0,0,0,0,0,0, 
+    m_val, l_val, Ixx_val, Iyy_val, Izz_val
+])
 X_i = SX([0,0,0,0,0,0,0,0,0,0,0,0, 
     m_val, l_val, Ixx_val, Iyy_val, Izz_val
 ])
-X_set = SX([0,0,10,0,0,0,0,0,0,0,0,0, 
-    m_val, l_val, Ixx_val, Iyy_val, Izz_val
-])
-Xk = X_set
+Xk = X_i
 
 for k in range(T):
     # Control constraints
@@ -249,7 +243,7 @@ for k in range(T):
     '''
 
     # Integrate till the end of the interval
-    Fk = F(Xi=Xk, U=Uk)
+    Fk = F(X_set=setpoint, Xi=Xk, U=Uk)
     Xk = Fk['Xf']
     J_tot = J_tot + Fk['J']
     
@@ -272,15 +266,33 @@ prob = {'f': J_tot, 'x': vertcat(*input_constr), 'g': vertcat(*state_constr)}
 solver = nlpsol('solver', 'ipopt', prob)
 
 # Solve the NLP
-print(gradient(J_tot, vertcat(*input_constr)))
 sol = solver()
 '''
     lbx=lb_input, ubx=ub_input, lbg=lb_state, ubg=ub_state)'''
-u_opt = sol['x']
 
 
 
-''' 
-All of the above steps are to initialize the MPC which is the solver.
 '''
+Displaying the trajectory.
+Write function to plot control inputs over time.
+Write function to plot reference and actual state over time.
+'''
+u_opt = np.array(sol['x'])
+traj_opt = np.array(sol['g'])
+print(np.shape(traj_opt))
 
+xs = []
+ys = []
+zs = []
+for i in range(int(len(traj_opt)/17)):
+    xs += [traj_opt[17*i]]
+    ys += [traj_opt[1+17*i]]
+    zs += [traj_opt[2+17*i]]
+print(zs)
+
+fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+ax.scatter(xs, ys, zs)
+ax.set_xlim(-5, 5)
+ax.set_ylim(-5, 5)
+ax.set_zlim(0, 30)
+plt.show()
